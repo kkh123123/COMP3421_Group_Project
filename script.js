@@ -13,6 +13,7 @@ const hkTemp = document.querySelector('#hk-temp');
 const hkHumidity = document.querySelector('#hk-humidity');
 const hkConditions = document.querySelector('#hk-conditions');
 
+
 // Update date and time with timezone offset
 function updateDateTime(elementDate, elementTime, timezoneOffset) {
     const now = new Date();
@@ -52,6 +53,7 @@ function fetchHongKongWeather() {
     const hkLat = 22.3193;
     const hkLon = 114.1694;
     
+    
     fetch(`https://api.openweathermap.org/data/3.0/onecall?lat=${hkLat}&lon=${hkLon}&exclude=minutely,hourly,alerts&units=metric&appid=62f83c9eacacd4002bb87979caeab3f9`)
         .then(response => response.json())
         .then(data => {
@@ -71,6 +73,7 @@ function fetchHongKongWeather() {
 function displayForecast(forecastData) {
     const forecastDisplay = document.querySelector('#forecast-display');
     forecastDisplay.innerHTML = ''; // Clear previous forecast
+    
 
     // Skip today (index 0) and get next 8 days
     for (let i = 1; i <= 8; i++) {
@@ -98,11 +101,33 @@ function displayForecast(forecastData) {
     // ✅ Show container once forecast is ready
     document.getElementById('forecast-container').style.display = 'block';
 }
+let map; // Variable to store the map instance
 
+function createMap(lat, lon) {
+    // Check if a map instance already exists
+    if (map) {
+        map.remove(); // Remove the existing map instance
+    }
 
+    // Create a new map centered at the given latitude and longitude
+    map = L.map('map').setView([lat, lon], 13);
+
+    // Add a tile layer to the map (OpenStreetMap tiles)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Add a marker at the specified location
+    L.marker([lat, lon]).addTo(map)
+        .bindPopup('Selected City')
+        .openPopup();
+}
 // Call this function when the page loads
 document.addEventListener('DOMContentLoaded', function() {
     fetchHongKongWeather();
+    createMap(22.3193,114.1694);
+    
 });
 
 // For searched city
@@ -110,108 +135,90 @@ let searchedCityTimeInterval;
 
 weatherForm.addEventListener('submit', function (event) {
     event.preventDefault();
-    const city = cityInput.value.trim();  // Trim spaces from input
-
-    weatherDisplay.innerHTML = '<p>Loading...</p>';  // Show loading message
-
-    console.log("City:", city);  // Log the city name for debugging
+    const city = cityInput.value.trim(); // Trim spaces from input
+    weatherDisplay.innerHTML = '<p>Loading...</p>'; // Show loading message
+    console.log("City:", city); // Log the city name for debugging
 
     // Fetch coordinates from the Geocoding API
     fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)}&limit=1&appid=62f83c9eacacd4002bb87979caeab3f9`)
         .then(response => response.json())
         .then(data => {
-            console.log("Geocoding API Response:", data);  // Log the Geocoding API response
-
+            console.log("Geocoding API Response:", data); // Log the Geocoding API response
             // Check if the response contains valid data
             if (Array.isArray(data) && data.length > 0) {
                 // Data returned is an array, check its length
                 const lat = data[0].lat;
                 const lon = data[0].lon;
-                console.log(`Latitude: ${lat}, Longitude: ${lon}`);  // Log coordinates to confirm
+                console.log(`Latitude: ${lat}, Longitude: ${lon}`); // Log coordinates to confirm
 
+                
+                createMap(lat, lon);
 
                 // Fetch weather data from the One Call API
                 fetch(`https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,alerts&units=metric&appid=62f83c9eacacd4002bb87979caeab3f9`)
                     .then(response => response.json())
                     .then(weatherData => {
-                        console.log("Weather Data Response:", weatherData);  // Log the weather data response
-
+                        console.log("Weather Data Response:", weatherData); // Log the weather data response
                         const location = data[0];
                         const displayName = `${location.name}, ${location.country}`;
-
                         const dateElement = document.createElement('p');
                         const timeElement = document.createElement('p');
-
-                    
-
                         // Clear previous interval if exists
                         if (searchedCityTimeInterval) {
                             clearInterval(searchedCityTimeInterval);
                         }
-
                         // Update time with the city's timezone
                         const timezoneOffset = weatherData.timezone_offset || 0;
-                        
                         // Initial update
                         updateDateTime(currentDate, currentTime, timezoneOffset);
-                                                
                         // Set interval for continuous updates
                         searchedCityTimeInterval = setInterval(() => {
                             updateDateTime(currentDate, currentTime, timezoneOffset);
                         }, 1000);
-
                         if (weatherData.current) {
                             const sunriseTime = new Date(weatherData.current.sunrise * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                             const sunsetTime = new Date(weatherData.current.sunset * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                             weatherDisplay.innerHTML = `
-  <h2>Weather in ${displayName}</h2>
-  <div class="weather-grid">
-    <div class="weather-box">
-      <span class="iconify" data-icon="solar:temperature-bold"></span>
-      <p>Temperature: ${Math.round(weatherData.current.temp)}°C</p>
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="solar:thermometer-bold-duotone"></span>
-      <p>Feels Like: ${Math.round(weatherData.current.feels_like)}°C</p>
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="material-symbols:humidity-percentage"></span>
-      <p>Humidity: ${weatherData.current.humidity}%</p>
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="solar:wind-bold"></span>
-      <p>Wind Speed: ${weatherData.current.wind_speed} m/s</p>
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="solar:sun-bold-duotone"></span>
-      <p>Sunrise: ${sunriseTime}<br><br>Sunset: ${sunsetTime}</p>
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="carbon:weather-station"></span>
-      <p>Conditions: ${weatherData.current.weather[0].main}</p>
-      <img 
-    src="${getWeatherIcon(weatherData.current.weather[0].icon)}" 
-    alt="Weather Icon"
-    class="weather-condition-icon"
-    >
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="solar:calendar-line-duotone"></span>
-      <p>Local Date: ${currentDate.textContent}</p>
-    </div>
-    <div class="weather-box">
-      <span class="iconify" data-icon="solar:clock-circle-bold-duotone"></span>
-      <p>Local Time: ${currentTime.textContent}</p>
-    </div>
-  </div>
-`;
-
-                            
-
+                                <h2>Weather in ${displayName}</h2>
+                                <div class="weather-grid">
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="solar:temperature-bold"></span>
+                                        <p>Temperature: ${Math.round(weatherData.current.temp)}°C</p>
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="solar:thermometer-bold-duotone"></span>
+                                        <p>Feels Like: ${Math.round(weatherData.current.feels_like)}°C</p>
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="material-symbols:humidity-percentage"></span>
+                                        <p>Humidity: ${weatherData.current.humidity}%</p>
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="solar:wind-bold"></span>
+                                        <p>Wind Speed: ${weatherData.current.wind_speed} m/s</p>
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="solar:sun-bold-duotone"></span>
+                                        <p>Sunrise: ${sunriseTime}<br><br>Sunset: ${sunsetTime}</p>
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="carbon:weather-station"></span>
+                                        <p>Conditions: ${weatherData.current.weather[0].main}</p>
+                                        <img src="${getWeatherIcon(weatherData.current.weather[0].icon)}" alt="Weather Icon" class="weather-condition-icon">
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="solar:calendar-line-duotone"></span>
+                                        <p>Local Date: ${currentDate.textContent}</p>
+                                    </div>
+                                    <div class="weather-box">
+                                        <span class="iconify" data-icon="solar:clock-circle-bold-duotone"></span>
+                                        <p>Local Time: ${currentTime.textContent}</p>
+                                    </div>
+                                </div>
+                            `;
                             if (weatherData.daily) {
                                 displayForecast(weatherData);
                             }
-                            
                         } else {
                             weatherDisplay.innerHTML = `<p>Weather data not available for this location.</p>`;
                         }
@@ -221,12 +228,12 @@ weatherForm.addEventListener('submit', function (event) {
                         weatherDisplay.innerHTML = `<p>Error fetching weather data. Please try again later.</p>`;
                     });
             } else {
-                console.error("City not found:", data);  // Log if no city was found
+                console.error("City not found:", data); // Log if no city was found
                 weatherDisplay.innerHTML = `<p>City not found. Please try again.</p>`;
             }
         })
         .catch(error => {
-            console.error("Error fetching city data:", error);  // Log any errors
+            console.error("Error fetching city data:", error); // Log any errors
             weatherDisplay.innerHTML = `<p>Error fetching city data. Please try again later.</p>`;
         });
 });
